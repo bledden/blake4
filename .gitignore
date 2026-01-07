@@ -1,0 +1,10 @@
+# Build directory
+build/
+
+# Editor
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store

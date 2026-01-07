@@ -77,14 +77,16 @@ BLAKE3 is already deployed and working. BLAKE4 should:
 - Target specific gaps
 - Provide migration path, not forced upgrade
 
-### NG2. Create a ZK-Friendly Hash
+### NG2. Create a ZK-Friendly Hash (For Now)
 
 ZK-friendly hashes require fundamentally different design:
 - Algebraic operations instead of ARX
 - Different security analysis
 - Different community and use cases
 
-A "BLAKE4-ZK" would not be BLAKE in any meaningful sense. This is a separate project.
+A "BLAKE4-ZK" would not be BLAKE in any meaningful sense.
+
+**Decision:** Skip ZK for initial release. Build PORTABLE + STREAM based on community needs first, then revisit ZK as a potential extension once the foundation is solid.
 
 ### NG3. Password Hashing
 
@@ -92,17 +94,15 @@ BLAKE4 is fast by design. Fast hashes are unsuitable for passwords.
 - Use Argon2, bcrypt, or scrypt for passwords
 - BLAKE4's KDF mode is for key derivation, not password hashing
 
-### NG4. FIPS 140 Certification (Initial Release)
+### NG4. FIPS 140 Certification
 
-FIPS certification is:
+FIPS certification is explicitly out of scope:
 - Expensive and time-consuming
 - Requires stable, frozen specification
-- May constrain design choices
+- Constrains design choices
+- BLAKE3 already failed to achieve this; no reason to believe BLAKE4 would succeed
 
-BLAKE4 should:
-- Design with certification possibility in mind
-- Not pursue certification in initial release
-- Document compliance considerations for future
+BLAKE4 will not pursue FIPS certification.
 
 ### NG5. Too Many Variants
 
@@ -168,6 +168,6 @@ BLAKE4 is successful if:
 | Number of flagships | 2 (PORTABLE + STREAM) | Avoid fragmentation while addressing main gaps |
 | 512-bit support | Optional profile, not default | Most users don't need it; keeps default simple |
 | ZK variant | Explicitly out of scope | Too different to be "BLAKE" |
-| FIPS path | Defer to future | Don't constrain initial design |
+| FIPS path | Not pursuing | Not worth the constraints |
 | API compatibility | Same shape as BLAKE3 | Ease migration |
 | Output compatibility | Not attempted | Algorithm change makes this impossible |
