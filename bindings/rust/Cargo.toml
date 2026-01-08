@@ -1,0 +1,27 @@
+[package]
+name = "blake4"
+version = "2.0.0"
+edition = "2021"
+authors = ["BLAKE4 Contributors"]
+description = "BLAKE4 cryptographic hash function - Rust bindings"
+license = "Unlicense"
+repository = "https://github.com/blake4/blake4"
+keywords = ["hash", "crypto", "blake4", "cryptography"]
+categories = ["cryptography"]
+
+[lib]
+name = "blake4"
+path = "src/lib.rs"
+
+[dependencies]
+
+[build-dependencies]
+cc = "1.0"
+
+[dev-dependencies]
+hex = "0.4"
+
+[features]
+default = []
+# Use system library instead of building from source
+system = []

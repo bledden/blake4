@@ -1,6 +1,15 @@
 # Build directory
 build/
 
+# Rust build artifacts
+bindings/rust/target/
+bindings/rust/Cargo.lock
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
 # Editor
 .vscode/
 *.swp
