@@ -307,10 +307,10 @@ static void blake4_compress_neon_impl(const uint64_t cv[8],
 /* ============== Registration ============== */
 
 /*
- * Constructor to register the NEON implementation on library load.
+ * Initialize and register the NEON intrinsics implementation.
+ * Called by blake4_dispatch.c to ensure registration even with static linking.
  */
-__attribute__((constructor))
-static void blake4_neon_init(void) {
+void blake4_init_neon(void) {
     blake4_register_neon(blake4_compress_neon_impl);
 }
 

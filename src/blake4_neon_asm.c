@@ -22,12 +22,10 @@ extern void blake4_compress_neon_asm(const uint64_t cv[8],
                                      uint64_t out[16]);
 
 /*
- * Constructor to register the NEON assembly implementation on library load.
- * This runs after blake4_neon.c's constructor, so the assembly version
- * will be preferred if both are available.
+ * Initialize and register the NEON assembly implementation.
+ * Called by blake4_dispatch.c to ensure registration even with static linking.
  */
-__attribute__((constructor(102)))  /* Priority 102, after intrinsics at 101 */
-static void blake4_neon_asm_init(void) {
+void blake4_init_neon_asm(void) {
     blake4_register_neon_asm(blake4_compress_neon_asm);
 }
 

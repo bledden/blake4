@@ -241,10 +241,10 @@ static void blake4_compress_avx2_impl(const uint64_t cv[8],
 /* ============== Registration ============== */
 
 /*
- * Constructor to register the AVX2 implementation on library load.
+ * Initialize and register the AVX2 intrinsics implementation.
+ * Called by blake4_dispatch.c to ensure registration even with static linking.
  */
-__attribute__((constructor))
-static void blake4_avx2_init(void) {
+void blake4_init_avx2(void) {
     blake4_register_avx2(blake4_compress_avx2_impl);
 }
 

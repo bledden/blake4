@@ -26,12 +26,10 @@ extern void blake4_compress_avx2_asm(const uint64_t cv[8],
                                       uint64_t out[16]);
 
 /*
- * Constructor to register the AVX2 assembly implementation on library load.
- * This runs after blake4_avx2.c's constructor, so the assembly version
- * will be preferred if both are available.
+ * Initialize and register the AVX2 assembly implementation.
+ * Called by blake4_dispatch.c to ensure registration even with static linking.
  */
-__attribute__((constructor(102)))  /* Priority 102, after intrinsics at 101 */
-static void blake4_avx2_asm_init(void) {
+void blake4_init_avx2_asm(void) {
     blake4_register_avx2_asm(blake4_compress_avx2_asm);
 }
 

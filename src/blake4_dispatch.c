@@ -325,9 +325,21 @@ void blake4_compress_portable(const uint64_t cv[8],
  * These are conditionally defined based on what's actually compiled in.
  * CMake sets these defines when the corresponding source files are included.
  *
- * For now, during initial development, we'll just have stub pointers that
- * can be set at runtime when the implementations are loaded.
+ * IMPORTANT: Static library linking may drop object files that aren't directly
+ * referenced. To ensure SIMD implementations are always linked, we declare
+ * external initialization functions and call them explicitly.
  */
+
+/* External SIMD initialization functions - defined in respective source files */
+#if defined(__aarch64__) || defined(_M_ARM64)
+extern void blake4_init_neon(void);
+extern void blake4_init_neon_asm(void);
+#elif defined(__x86_64__) || defined(_M_X64)
+extern void blake4_init_avx2(void);
+extern void blake4_init_avx2_asm(void);
+extern void blake4_init_avx512(void);
+extern void blake4_init_avx512_asm(void);
+#endif
 
 /* Implementation function pointers - NULL if not available */
 static blake4_compress_fn g_avx2_fn = NULL;
@@ -351,6 +363,31 @@ void blake4_register_neon_asm(blake4_compress_fn fn) { g_neon_asm_fn = fn; }
 /* ============== Implementation Selection ============== */
 
 /*
+ * Initialize SIMD implementations.
+ * This must be called before select_implementation() to ensure all
+ * implementations are registered even when linking statically.
+ */
+static _Atomic int g_simd_initialized = 0;
+
+static void init_simd_implementations(void) {
+    if (atomic_load(&g_simd_initialized)) {
+        return;
+    }
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+    blake4_init_neon();
+    blake4_init_neon_asm();
+#elif defined(__x86_64__) || defined(_M_X64)
+    blake4_init_avx512();
+    blake4_init_avx512_asm();
+    blake4_init_avx2();
+    blake4_init_avx2_asm();
+#endif
+
+    atomic_store(&g_simd_initialized, 1);
+}
+
+/*
  * Select the best available implementation based on CPU features.
  * Called automatically on first use.
  */
@@ -358,6 +395,9 @@ static void select_implementation(void) {
     if (atomic_load(&g_impl_selected)) {
         return;
     }
+
+    /* Ensure SIMD implementations are registered */
+    init_simd_implementations();
 
     uint32_t features = get_cpu_features();
 
