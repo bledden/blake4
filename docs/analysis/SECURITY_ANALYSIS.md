@@ -1,8 +1,8 @@
 # BLAKE4 Security Analysis
 
-**Version:** 1.1
+**Version:** 1.2
 **Date:** January 2026
-**Status:** Quantum Analysis Validated
+**Status:** Theoretical Analysis Validated (Experimental Pending)
 
 This document provides a formal security analysis of BLAKE4, following the structure expected by cryptographic review bodies such as NIST, IACR, and academic peer review.
 
@@ -143,7 +143,7 @@ The 10-round structure provides margin against combined differential-linear atta
 
 ## 5. Quantum Security Analysis
 
-**Status**: Independently validated by quantum computing analysis (January 2026)
+**Status**: Theoretical analysis validated (January 2026) - Experimental verification pending
 
 ### 5.1 Grover's Algorithm
 
@@ -428,7 +428,8 @@ Current test status: 35 core tests + 21 stream tests passing (56 total).
 ### C.1 Validation Date and Methodology
 
 **Date**: January 8, 2026
-**Method**: Independent analysis using quantum computing resources
+**Method**: Theoretical analysis (experimental quantum simulation pending)
+**Validation Type**: Mathematical bounds and complexity analysis
 
 ### C.2 Key Findings
 

@@ -1,10 +1,12 @@
 # BLAKE4 Quantum Analysis Questions
 
-**Status**: ✅ ANALYSIS COMPLETE - All questions validated (January 8, 2026)
+**Status**: 🔶 THEORETICAL ANALYSIS COMPLETE - Experimental verification pending
 
 This document contains specific questions and analysis tasks for quantum computing resources and specialized AI agents to investigate BLAKE4's post-quantum security properties.
 
-> **Summary of Findings**: All security claims validated. BLAKE4 provides 256-bit post-quantum preimage security and ~170-bit quantum collision security. See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) Appendix C for complete results.
+> **Summary of Findings**: Theoretical security claims validated. BLAKE4 provides 256-bit post-quantum preimage security and ~170-bit quantum collision security. See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) Appendix C for complete results.
+>
+> **Pending**: Quantum simulation experiments (Sections 5, 8) and detailed resource estimates (Section 6.2)
 
 ---
 
@@ -319,9 +321,9 @@ After quantum analysis, we should have:
 
 ## Analysis Results (January 8, 2026)
 
-### Summary
+### Theoretical Analysis Summary
 
-All expected outcomes have been achieved:
+The following outcomes have been achieved through theoretical analysis:
 
 | Outcome | Status | Finding |
 |---------|--------|---------|
@@ -331,14 +333,14 @@ All expected outcomes have been achieved:
 | Parameter recommendations | ✅ Complete | Current parameters optimal; no changes needed |
 | Signature compatibility | ✅ Complete | SPHINCS+, XMSS, LMS all compatible |
 
-### Key Metrics
+### Key Metrics (Theoretical)
 
-| Metric | Value |
-|--------|-------|
-| T-gates per compression | ~300,000-400,000 |
-| Grover total cost | ~2^275 T-gates |
-| BHT memory requirement | ~2^176 bytes |
-| QROM security | Validated |
+| Metric | Value | Source |
+|--------|-------|--------|
+| T-gates per compression | ~300,000-400,000 | Theoretical estimate |
+| Grover total cost | ~2^275 T-gates | Theoretical estimate |
+| BHT memory requirement | ~2^176 bytes | Theoretical estimate |
+| QROM security | Validated | Theoretical analysis |
 
 ### Recommendations Implemented
 
@@ -349,5 +351,46 @@ All expected outcomes have been achieved:
 
 ---
 
+## Pending Experimental Work
+
+The following tasks require actual quantum computing resources to complete:
+
+### High Priority
+
+| Task | Section | Status | Notes |
+|------|---------|--------|-------|
+| G function quantum circuit implementation | 5.1 | ⏳ Pending | Measure actual gate count/depth |
+| Reduced-round differential analysis | 5.2 | ⏳ Pending | Quantum amplitude amplification test |
+| Qubit count estimation | 6.2 | ⏳ Pending | Logical qubits for Grover attack |
+| Wall-clock time estimation | 6.2 | ⏳ Pending | At 1 MHz, 1000 qubits |
+
+### Experimental Verification (Section 8)
+
+| Experiment | Status | Notes |
+|------------|--------|-------|
+| Superposition query test | ⏳ Pending | Implement compression as quantum oracle |
+| Collision search simulation | ⏳ Pending | 4-round BLAKE4, extrapolate to 10 |
+| Structure detection | ⏳ Pending | Quantum distinguisher test |
+
+### Questions Needing Experimental Data
+
+1. **Section 5.1**: What is the *actual* (not estimated) T-gate count for G function?
+2. **Section 5.2**: At what round count does quantum advantage become negligible?
+3. **Section 6.2**: How does BLAKE4 compare to AES-256 in actual quantum resource usage?
+
+---
+
+## Implementation Optimizations (From HANDOFF.md)
+
+These optimizations should be completed before formal submission:
+
+| Optimization | Status | Priority |
+|--------------|--------|----------|
+| Multi-threaded parallel chunk processing | ⏳ Pending | High |
+| SIMD integration into main hasher path | ⏳ Pending | High |
+| Pure assembly implementations | ⏳ Pending | Medium |
+
+---
+
 *Document prepared for BLAKE4 post-quantum analysis*
-*Version 1.1 - January 2026 (Analysis Complete)*
+*Version 1.2 - January 2026 (Theoretical Complete, Experimental Pending)*
