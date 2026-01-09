@@ -311,8 +311,8 @@ let hash = hasher.finalize();
 |------|---------|
 | `src/blake4.c` | Core implementation + HBS APIs |
 | `include/blake4.h` | Public API header |
-| `SECURITY_ANALYSIS.md` | Formal security claims and analysis |
-| `QUANTUM_ANALYSIS.md` | Questions for quantum analysis |
+| `docs/analysis/SECURITY_ANALYSIS.md` | Formal security claims and analysis |
+| `docs/analysis/QUANTUM_ANALYSIS.md` | Questions for quantum analysis |
 | `BLAKE4_SPEC.md` | Full specification with test vectors |
 
 ---
@@ -320,8 +320,8 @@ let hash = hasher.finalize();
 ## References
 
 - **Specification:** [BLAKE4_SPEC.md](BLAKE4_SPEC.md)
-- **Security Analysis:** [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md)
-- **Quantum Analysis:** [QUANTUM_ANALYSIS.md](QUANTUM_ANALYSIS.md)
+- **Security Analysis:** [docs/analysis/SECURITY_ANALYSIS.md](docs/analysis/SECURITY_ANALYSIS.md)
+- **Quantum Analysis:** [docs/analysis/QUANTUM_ANALYSIS.md](docs/analysis/QUANTUM_ANALYSIS.md)
 - **BLAKE2 RFC:** RFC 7693
 - **BLAKE3:** https://github.com/BLAKE3-team/BLAKE3
 - **SPHINCS+:** https://sphincs.org/
