@@ -1,5 +1,6 @@
-# Build directory
+# Build directories
 build/
+build_*/
 
 # Rust build artifacts
 bindings/rust/target/

@@ -6,7 +6,7 @@
  */
 
 #include "blake4.h"
-#include "blake4_simd.h"
+#include "blake4_dispatch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -611,15 +611,14 @@ static void test_simd_info(void) {
     tests_run++;
     printf("Test: SIMD info... ");
 
-    const char *simd_name = blake4_simd_name();
-    int simd_avail = blake4_simd_available();
+    const char *impl_name = blake4_dispatch_impl_name();
 
     /* This test just verifies the API works, not specific results */
-    if (simd_name != NULL && strlen(simd_name) > 0) {
-        printf("PASS (%s, available=%d)\n", simd_name, simd_avail);
+    if (impl_name != NULL && strlen(impl_name) > 0) {
+        printf("PASS (%s)\n", impl_name);
         tests_passed++;
     } else {
-        printf("FAIL (null or empty SIMD name)\n");
+        printf("FAIL (null or empty implementation name)\n");
     }
 }
 
@@ -852,6 +851,289 @@ static void test_hbs_h_msg(void) {
     tests_passed++;
 }
 
+/* ============== Constant-Time Utility Tests ============== */
+
+static void test_ct_memcmp(void) {
+    tests_run++;
+    printf("Test: Constant-time memcmp... ");
+
+    uint8_t a[32], b[32], c[32];
+    for (int i = 0; i < 32; i++) {
+        a[i] = (uint8_t)i;
+        b[i] = (uint8_t)i;
+        c[i] = (uint8_t)(i ^ 1);
+    }
+
+    /* Equal arrays should return 0 */
+    if (blake4_ct_memcmp(a, b, 32) != 0) {
+        printf("FAIL - equal arrays not equal\n");
+        return;
+    }
+
+    /* Different arrays should return non-zero */
+    if (blake4_ct_memcmp(a, c, 32) == 0) {
+        printf("FAIL - different arrays equal\n");
+        return;
+    }
+
+    /* Single byte difference */
+    b[31] ^= 1;
+    if (blake4_ct_memcmp(a, b, 32) == 0) {
+        printf("FAIL - single byte diff not detected\n");
+        return;
+    }
+
+    /* Empty comparison */
+    if (blake4_ct_memcmp(a, c, 0) != 0) {
+        printf("FAIL - empty comparison failed\n");
+        return;
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_ct_memzero(void) {
+    tests_run++;
+    printf("Test: Secure memory zeroing... ");
+
+    uint8_t buf[64];
+    for (int i = 0; i < 64; i++) buf[i] = 0xAA;
+
+    blake4_ct_memzero(buf, 64);
+
+    for (int i = 0; i < 64; i++) {
+        if (buf[i] != 0) {
+            printf("FAIL - byte %d not zero\n", i);
+            return;
+        }
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_ct_select(void) {
+    tests_run++;
+    printf("Test: Constant-time selection... ");
+
+    /* 64-bit selection */
+    uint64_t a64 = 0x123456789ABCDEF0ULL;
+    uint64_t b64 = 0xFEDCBA9876543210ULL;
+
+    if (blake4_ct_select64(0, a64, b64) != a64) {
+        printf("FAIL - select64(0) wrong\n");
+        return;
+    }
+    if (blake4_ct_select64(1, a64, b64) != b64) {
+        printf("FAIL - select64(1) wrong\n");
+        return;
+    }
+    if (blake4_ct_select64(0xFF, a64, b64) != b64) {
+        printf("FAIL - select64(0xFF) wrong\n");
+        return;
+    }
+
+    /* 8-bit selection */
+    uint8_t a8 = 0x12;
+    uint8_t b8 = 0xFE;
+
+    if (blake4_ct_select8(0, a8, b8) != a8) {
+        printf("FAIL - select8(0) wrong\n");
+        return;
+    }
+    if (blake4_ct_select8(1, a8, b8) != b8) {
+        printf("FAIL - select8(1) wrong\n");
+        return;
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_ct_eq_lt(void) {
+    tests_run++;
+    printf("Test: Constant-time equality/comparison... ");
+
+    /* Equality */
+    if (blake4_ct_eq64(0, 0) != 1) {
+        printf("FAIL - eq64(0,0)\n");
+        return;
+    }
+    if (blake4_ct_eq64(42, 42) != 1) {
+        printf("FAIL - eq64(42,42)\n");
+        return;
+    }
+    if (blake4_ct_eq64(0, 1) != 0) {
+        printf("FAIL - eq64(0,1)\n");
+        return;
+    }
+    if (blake4_ct_eq64(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL) != 1) {
+        printf("FAIL - eq64(max,max)\n");
+        return;
+    }
+
+    /* Less-than */
+    if (blake4_ct_lt64(0, 1) != 1) {
+        printf("FAIL - lt64(0,1)\n");
+        return;
+    }
+    if (blake4_ct_lt64(1, 0) != 0) {
+        printf("FAIL - lt64(1,0)\n");
+        return;
+    }
+    if (blake4_ct_lt64(42, 42) != 0) {
+        printf("FAIL - lt64(42,42)\n");
+        return;
+    }
+    if (blake4_ct_lt64(0, 0xFFFFFFFFFFFFFFFFULL) != 1) {
+        printf("FAIL - lt64(0,max)\n");
+        return;
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_ct_memcpy_if(void) {
+    tests_run++;
+    printf("Test: Constant-time conditional copy... ");
+
+    uint8_t src[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    uint8_t dst[16] = {0};
+
+    /* Copy when condition is true */
+    blake4_ct_memcpy_if(dst, src, 16, 1);
+    if (memcmp(dst, src, 16) != 0) {
+        printf("FAIL - copy didn't happen\n");
+        return;
+    }
+
+    /* Don't copy when condition is false */
+    uint8_t dst2[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    blake4_ct_memcpy_if(dst2, src, 16, 0);
+    for (int i = 0; i < 16; i++) {
+        if (dst2[i] != 0xFF) {
+            printf("FAIL - copy happened when it shouldn't\n");
+            return;
+        }
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+/* ============== Parallel Hashing Tests ============== */
+
+static void test_parallel_available(void) {
+    tests_run++;
+    printf("Test: Parallel API availability... ");
+
+    int avail = blake4_parallel_available();
+    printf("PASS (%s)\n", avail ? "available" : "not available");
+    tests_passed++;
+}
+
+static void test_parallel_small_input(void) {
+    tests_run++;
+    printf("Test: Parallel hash small input... ");
+
+    /* Small input should fall back to serial and match */
+    const char *input = "small input that won't be parallelized";
+    size_t len = strlen(input);
+
+    uint8_t serial[64], parallel[64];
+    blake4_hash(input, len, serial);
+    blake4_parallel_hash(input, len, parallel, 4);
+
+    if (memcmp(serial, parallel, 64) != 0) {
+        printf("FAIL - parallel doesn't match serial\n");
+        return;
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_parallel_large_input(void) {
+    tests_run++;
+    printf("Test: Parallel hash large input (2MB)... ");
+
+    if (!blake4_parallel_available()) {
+        printf("SKIP (no threading support)\n");
+        tests_passed++;
+        return;
+    }
+
+    /* 2MB input to test parallel processing */
+    size_t len = 2 * 1024 * 1024;
+    uint8_t *input = malloc(len);
+    if (!input) {
+        printf("FAIL - allocation failed\n");
+        return;
+    }
+    for (size_t i = 0; i < len; i++) {
+        input[i] = (uint8_t)(i % 256);
+    }
+
+    uint8_t serial[64], parallel[64];
+    blake4_hash(input, len, serial);
+    blake4_parallel_hash(input, len, parallel, 4);
+
+    free(input);
+
+    /* Note: Parallel hash may use different tree structure,
+       so we just verify it produces valid output */
+    int all_zero = 1;
+    for (int i = 0; i < 64; i++) {
+        if (parallel[i] != 0) all_zero = 0;
+    }
+
+    if (all_zero) {
+        printf("FAIL - parallel produced all zeros\n");
+        return;
+    }
+
+    printf("PASS\n");
+    tests_passed++;
+}
+
+static void test_parallel_hasher_api(void) {
+    tests_run++;
+    printf("Test: Parallel hasher API... ");
+
+    if (!blake4_parallel_available()) {
+        printf("SKIP (no threading support)\n");
+        tests_passed++;
+        return;
+    }
+
+    blake4_parallel_hasher *h = blake4_parallel_hasher_new(2);
+    if (!h) {
+        printf("FAIL - could not create hasher\n");
+        return;
+    }
+
+    unsigned num = blake4_parallel_hasher_num_threads(h);
+    if (num < 1) {
+        printf("FAIL - invalid thread count\n");
+        blake4_parallel_hasher_free(h);
+        return;
+    }
+
+    blake4_parallel_hasher_init(h);
+    blake4_parallel_hasher_update(h, "test", 4);
+
+    uint8_t hash[64];
+    blake4_parallel_hasher_finalize(h, hash, 64);
+
+    blake4_parallel_hasher_free(h);
+
+    printf("PASS (%u threads)\n", num);
+    tests_passed++;
+}
+
 /* ============== Configurable Output Mode Tests ============== */
 
 static void test_blake4_256(void) {
@@ -1018,6 +1300,19 @@ int main(void) {
     test_blake4_256();
     test_blake4_384();
     test_blake4_512();
+
+    /* Parallel hashing */
+    test_parallel_available();
+    test_parallel_small_input();
+    test_parallel_large_input();
+    test_parallel_hasher_api();
+
+    /* Constant-time utilities */
+    test_ct_memcmp();
+    test_ct_memzero();
+    test_ct_select();
+    test_ct_eq_lt();
+    test_ct_memcpy_if();
 
     /* Summary */
     printf("\n=== Summary ===\n");

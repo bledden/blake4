@@ -1,11 +1,15 @@
 cmake_minimum_required(VERSION 3.14)
-project(blake4 VERSION 2.0.0 LANGUAGES C)
+project(blake4 VERSION 2.0.0 LANGUAGES C ASM)
 
 # Options
 option(BLAKE4_BUILD_TESTS "Build test suite" ON)
 option(BLAKE4_BUILD_SHARED "Build shared library" ON)
 option(BLAKE4_BUILD_STATIC "Build static library" ON)
 option(BLAKE4_ENABLE_SIMD "Enable SIMD optimizations" ON)
+option(BLAKE4_SANITIZE_ADDRESS "Enable AddressSanitizer" OFF)
+option(BLAKE4_SANITIZE_UNDEFINED "Enable UndefinedBehaviorSanitizer" OFF)
+option(BLAKE4_SANITIZE_MEMORY "Enable MemorySanitizer (Clang only)" OFF)
+option(BLAKE4_SANITIZE_THREAD "Enable ThreadSanitizer" OFF)
 
 # C standard
 set(CMAKE_C_STANDARD 11)
@@ -16,10 +20,54 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -pedantic)
 endif()
 
+# Sanitizer configuration
+set(BLAKE4_SANITIZER_FLAGS "")
+
+if(BLAKE4_SANITIZE_ADDRESS)
+    message(STATUS "BLAKE4: AddressSanitizer enabled")
+    list(APPEND BLAKE4_SANITIZER_FLAGS "-fsanitize=address")
+    # Disable SIMD with ASan for better error detection
+    set(BLAKE4_ENABLE_SIMD OFF CACHE BOOL "Disabled due to ASan" FORCE)
+endif()
+
+if(BLAKE4_SANITIZE_UNDEFINED)
+    message(STATUS "BLAKE4: UndefinedBehaviorSanitizer enabled")
+    list(APPEND BLAKE4_SANITIZER_FLAGS "-fsanitize=undefined")
+endif()
+
+if(BLAKE4_SANITIZE_MEMORY)
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+        message(STATUS "BLAKE4: MemorySanitizer enabled")
+        list(APPEND BLAKE4_SANITIZER_FLAGS "-fsanitize=memory")
+        # MSan requires -fno-omit-frame-pointer for better stack traces
+        list(APPEND BLAKE4_SANITIZER_FLAGS "-fno-omit-frame-pointer")
+    else()
+        message(WARNING "BLAKE4: MemorySanitizer is only supported by Clang")
+    endif()
+endif()
+
+if(BLAKE4_SANITIZE_THREAD)
+    message(STATUS "BLAKE4: ThreadSanitizer enabled")
+    list(APPEND BLAKE4_SANITIZER_FLAGS "-fsanitize=thread")
+endif()
+
+if(BLAKE4_SANITIZER_FLAGS)
+    add_compile_options(${BLAKE4_SANITIZER_FLAGS})
+    add_link_options(${BLAKE4_SANITIZER_FLAGS})
+endif()
+
 # Source files
 set(BLAKE4_SOURCES
     src/blake4.c
+    src/blake4_dispatch.c
+    src/blake4_parallel.c
+    src/blake4_ct.c
 )
+
+# Thread library detection
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads)
 
 set(BLAKE4_STREAM_SOURCES
     src/blake4_stream.c
@@ -33,6 +81,7 @@ set(BLAKE4_SIMD_SOURCES
 # Header files
 set(BLAKE4_HEADERS
     include/blake4.h
+    include/blake4_dispatch.h
 )
 
 set(BLAKE4_STREAM_HEADERS
@@ -56,9 +105,21 @@ if(BLAKE4_ENABLE_SIMD)
         if(HAS_AVX512)
             message(STATUS "BLAKE4: AVX-512 support detected")
             set(BLAKE4_SIMD_FLAGS "-mavx512f" "-mavx512vl")
+            # AVX-512 intrinsics and assembly
+            list(APPEND BLAKE4_SOURCES src/blake4_avx512.c)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx512_x86-64.S)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx512_asm.c)
+            # Also include AVX2 for broader compatibility testing
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2.c)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2_x86-64.S)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2_asm.c)
         elseif(HAS_AVX2)
             message(STATUS "BLAKE4: AVX2 support detected")
             set(BLAKE4_SIMD_FLAGS "-mavx2")
+            # AVX2 intrinsics and assembly
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2.c)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2_x86-64.S)
+            list(APPEND BLAKE4_SOURCES src/blake4_avx2_asm.c)
         else()
             message(STATUS "BLAKE4: No x86 SIMD support detected")
         endif()
@@ -66,6 +127,11 @@ if(BLAKE4_ENABLE_SIMD)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
         message(STATUS "BLAKE4: ARM64 detected, NEON enabled by default")
         # NEON is typically enabled by default on ARM64
+        # Add NEON intrinsics source
+        list(APPEND BLAKE4_SOURCES src/blake4_neon.c)
+        # Add NEON assembly source
+        list(APPEND BLAKE4_SOURCES src/blake4_neon_arm64.S)
+        list(APPEND BLAKE4_SOURCES src/blake4_neon_asm.c)
     else()
         message(STATUS "BLAKE4: Unknown architecture, SIMD disabled")
     endif()
@@ -84,6 +150,10 @@ if(BLAKE4_BUILD_STATIC)
     )
     if(BLAKE4_SIMD_FLAGS)
         target_compile_options(blake4_static PRIVATE ${BLAKE4_SIMD_FLAGS})
+    endif()
+    # Link thread library for parallel hashing
+    if(Threads_FOUND)
+        target_link_libraries(blake4_static PRIVATE Threads::Threads)
     endif()
     set_target_properties(blake4_static PROPERTIES
         OUTPUT_NAME blake4
@@ -114,6 +184,10 @@ if(BLAKE4_BUILD_SHARED)
     )
     if(BLAKE4_SIMD_FLAGS)
         target_compile_options(blake4_shared PRIVATE ${BLAKE4_SIMD_FLAGS})
+    endif()
+    # Link thread library for parallel hashing
+    if(Threads_FOUND)
+        target_link_libraries(blake4_shared PRIVATE Threads::Threads)
     endif()
     set_target_properties(blake4_shared PROPERTIES
         OUTPUT_NAME blake4
@@ -174,6 +248,76 @@ if(BLAKE4_BUILD_TESTS)
         target_link_libraries(gen_vectors PRIVATE blake4_stream_static)
     else()
         target_link_libraries(gen_vectors PRIVATE blake4_stream_shared)
+    endif()
+
+    # Benchmark tool
+    add_executable(benchmark tools/benchmark.c)
+    if(BLAKE4_BUILD_STATIC)
+        target_link_libraries(benchmark PRIVATE blake4_static)
+    else()
+        target_link_libraries(benchmark PRIVATE blake4_shared)
+    endif()
+endif()
+
+# Fuzzing targets (libFuzzer)
+# Note: Requires LLVM Clang with libFuzzer (not Apple Clang).
+# Install via: brew install llvm
+# Build with: cmake .. -DBLAKE4_BUILD_FUZZ=ON -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang
+option(BLAKE4_BUILD_FUZZ "Build fuzzing harnesses (requires LLVM Clang)" OFF)
+
+if(BLAKE4_BUILD_FUZZ)
+    if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "Fuzzing requires Clang compiler with libFuzzer")
+    endif()
+
+    # Check if this is Apple Clang (which lacks libFuzzer)
+    if(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+        message(WARNING "Apple Clang may not include libFuzzer. Use LLVM Clang instead:\n  brew install llvm\n  cmake .. -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang")
+    endif()
+
+    message(STATUS "BLAKE4: Building fuzz targets")
+
+    # Common fuzzer flags
+    set(FUZZER_FLAGS "-fsanitize=fuzzer,address,undefined" "-fno-omit-frame-pointer")
+
+    # Fuzz one-shot hashing
+    add_executable(fuzz_hash fuzz/fuzz_hash.c)
+    target_compile_options(fuzz_hash PRIVATE ${FUZZER_FLAGS})
+    target_link_options(fuzz_hash PRIVATE ${FUZZER_FLAGS})
+    if(BLAKE4_BUILD_STATIC)
+        target_link_libraries(fuzz_hash PRIVATE blake4_static)
+    else()
+        target_link_libraries(fuzz_hash PRIVATE blake4_shared)
+    endif()
+
+    # Fuzz incremental API
+    add_executable(fuzz_incremental fuzz/fuzz_incremental.c)
+    target_compile_options(fuzz_incremental PRIVATE ${FUZZER_FLAGS})
+    target_link_options(fuzz_incremental PRIVATE ${FUZZER_FLAGS})
+    if(BLAKE4_BUILD_STATIC)
+        target_link_libraries(fuzz_incremental PRIVATE blake4_static)
+    else()
+        target_link_libraries(fuzz_incremental PRIVATE blake4_shared)
+    endif()
+
+    # Fuzz deserialization
+    add_executable(fuzz_deserialize fuzz/fuzz_deserialize.c)
+    target_compile_options(fuzz_deserialize PRIVATE ${FUZZER_FLAGS})
+    target_link_options(fuzz_deserialize PRIVATE ${FUZZER_FLAGS})
+    if(BLAKE4_BUILD_STATIC)
+        target_link_libraries(fuzz_deserialize PRIVATE blake4_static)
+    else()
+        target_link_libraries(fuzz_deserialize PRIVATE blake4_shared)
+    endif()
+
+    # Fuzz keyed hashing
+    add_executable(fuzz_keyed fuzz/fuzz_keyed.c)
+    target_compile_options(fuzz_keyed PRIVATE ${FUZZER_FLAGS})
+    target_link_options(fuzz_keyed PRIVATE ${FUZZER_FLAGS})
+    if(BLAKE4_BUILD_STATIC)
+        target_link_libraries(fuzz_keyed PRIVATE blake4_static)
+    else()
+        target_link_libraries(fuzz_keyed PRIVATE blake4_shared)
     endif()
 endif()
 

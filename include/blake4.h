@@ -150,6 +150,94 @@ void blake4_hash_keyed(const uint8_t key[BLAKE4_KEY_LEN], const void *input,
 void blake4_derive_key(const char *context, const void *key_material,
                        size_t key_material_len, uint8_t *out, size_t out_len);
 
+/* ============== Parallel Hashing API ============== */
+/*
+ * Multi-threaded parallel hashing for large inputs.
+ * Uses chunk-based work distribution with independent CVs per worker.
+ * Parallelization threshold: inputs > 1MB will benefit from multi-threading.
+ */
+
+/**
+ * Parallel hasher state (opaque).
+ * Created with blake4_parallel_hasher_new, destroyed with blake4_parallel_hasher_free.
+ */
+typedef struct blake4_parallel_hasher blake4_parallel_hasher;
+
+/**
+ * Create a new parallel hasher.
+ *
+ * @param num_threads Number of worker threads (0 = auto-detect CPU count)
+ * @return New hasher, or NULL on allocation failure
+ */
+blake4_parallel_hasher* blake4_parallel_hasher_new(unsigned num_threads);
+
+/**
+ * Free a parallel hasher and its resources.
+ */
+void blake4_parallel_hasher_free(blake4_parallel_hasher *self);
+
+/**
+ * Initialize parallel hasher for standard hashing.
+ */
+void blake4_parallel_hasher_init(blake4_parallel_hasher *self);
+
+/**
+ * Initialize parallel hasher for keyed hashing (MAC).
+ */
+void blake4_parallel_hasher_init_keyed(blake4_parallel_hasher *self,
+                                        const uint8_t key[BLAKE4_KEY_LEN]);
+
+/**
+ * Add input data to the parallel hasher.
+ * For small inputs (< 1MB), uses single-threaded path.
+ * For large inputs, distributes chunks across worker threads.
+ */
+void blake4_parallel_hasher_update(blake4_parallel_hasher *self,
+                                    const void *input, size_t input_len);
+
+/**
+ * Finalize and produce output hash.
+ * Coordinates worker threads and performs tree merge.
+ */
+void blake4_parallel_hasher_finalize(blake4_parallel_hasher *self,
+                                      uint8_t *out, size_t out_len);
+
+/**
+ * Reset parallel hasher to initial state.
+ */
+void blake4_parallel_hasher_reset(blake4_parallel_hasher *self);
+
+/**
+ * Hash data in one call using multiple threads.
+ * For inputs < 1MB, automatically falls back to single-threaded.
+ *
+ * @param input Input data
+ * @param input_len Length of input
+ * @param out Output buffer (BLAKE4_OUT_LEN bytes)
+ * @param num_threads Number of threads (0 = auto-detect)
+ */
+void blake4_parallel_hash(const void *input, size_t input_len,
+                          uint8_t out[BLAKE4_OUT_LEN],
+                          unsigned num_threads);
+
+/**
+ * Parallel hash with arbitrary output length (XOF mode).
+ */
+void blake4_parallel_hash_xof(const void *input, size_t input_len,
+                               uint8_t *out, size_t out_len,
+                               unsigned num_threads);
+
+/**
+ * Get the number of threads used by a parallel hasher.
+ */
+unsigned blake4_parallel_hasher_num_threads(const blake4_parallel_hasher *self);
+
+/**
+ * Query if parallel hashing is available on this platform.
+ * Returns 1 if threading support is compiled in, 0 otherwise.
+ */
+int blake4_parallel_available(void);
+
 /* ============== Hash-Based Signature Support ============== */
 /*
  * These functions are optimized for post-quantum hash-based signature schemes
@@ -273,6 +361,59 @@ void blake4_384_hash(const void *input, size_t input_len, uint8_t out[48]);
  * Provides 256-bit classical / 170-bit quantum collision resistance.
  */
 void blake4_512_hash(const void *input, size_t input_len, uint8_t out[64]);
+
+/* ============== Constant-Time Utilities ============== */
+/*
+ * These functions provide constant-time operations critical for
+ * cryptographic security. They prevent timing side-channel attacks
+ * by ensuring execution time is independent of secret data values.
+ */
+
+/**
+ * Constant-time memory comparison.
+ * Use this instead of memcmp() when comparing MACs, keys, or secrets.
+ *
+ * Returns 0 if equal, non-zero if different.
+ * Execution time is independent of where arrays differ.
+ */
+int blake4_ct_memcmp(const void *a, const void *b, size_t n);
+
+/**
+ * Secure memory zeroing.
+ * Use this to clear keys, intermediate state, and other secrets.
+ * Guaranteed not to be optimized away by the compiler.
+ */
+void blake4_ct_memzero(void *ptr, size_t n);
+
+/**
+ * Constant-time 64-bit conditional selection.
+ * Returns a if condition is 0, b if condition is non-zero.
+ */
+uint64_t blake4_ct_select64(uint64_t condition, uint64_t a, uint64_t b);
+
+/**
+ * Constant-time 8-bit conditional selection.
+ */
+uint8_t blake4_ct_select8(uint8_t condition, uint8_t a, uint8_t b);
+
+/**
+ * Constant-time conditional memory copy.
+ * If condition is non-zero, copies src to dst.
+ * If condition is zero, dst is unchanged (but still accessed).
+ */
+void blake4_ct_memcpy_if(void *dst, const void *src, size_t n, int condition);
+
+/**
+ * Constant-time 64-bit equality check.
+ * Returns 1 if a == b, 0 otherwise.
+ */
+int blake4_ct_eq64(uint64_t a, uint64_t b);
+
+/**
+ * Constant-time 64-bit less-than comparison.
+ * Returns 1 if a < b, 0 otherwise.
+ */
+int blake4_ct_lt64(uint64_t a, uint64_t b);
 
 /* ============== Version Info ============== */
 
